@@ -417,6 +417,14 @@ button,
   color: #6d28d9;
 }
 
+.localizacao-grid {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 /* Detalhes Expansíveis */
 .viagem-detalhes {
   margin-top: 0.9rem;

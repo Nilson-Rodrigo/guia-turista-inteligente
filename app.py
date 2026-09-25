@@ -204,7 +204,7 @@ def logout():
     return redirect(url_for("index"))
 
 
-@app.route("/viagens/criar", methods=["GET", "POST"])
+@app.route("/viagens/criar", methods=["POST"])
 def criar_viagem():
     """Processa o formulário de criação com deduplicação (locks) e orquestração de APIs."""
     usuario = session.get("usuario")
@@ -231,13 +231,20 @@ def criar_viagem():
             percurso = obter_percurso(client, lat_o, lon_o, lat_d, lon_d)
         destino_formatado = f"{destino} - {uf_d_real or uf_destino}"
         guia, diagnostico_ia = obter_guia_destino_com_diagnostico(destino_formatado)
+        status_servicos = {
+            "geocoding": "sucesso" if (lat_o, lon_o) != (0.0, 0.0) and (lat_d, lon_d) != (0.0, 0.0) else "fallback",
+            "clima": "sucesso" if all(valor != "N/D" for valor in clima.values()) else "fallback",
+            "percurso": "sucesso" if percurso.get("modal") != "indisponível" else "fallback",
+            "inteligencia_artificial": diagnostico_ia,
+        }
         item = {
             "id": uuid.uuid4().hex[:8], "criado_em": agora_iso(),
             "origem": f"{origem} - {uf_o_real or uf_origem}", "destino": destino_formatado,
             "geolocalizacao": {"origem": {"cidade": origem, "uf": uf_o_real or uf_origem, "latitude": lat_o, "longitude": lon_o},
                                "destino": {"cidade": destino, "uf": uf_d_real or uf_destino, "latitude": lat_d, "longitude": lon_d}},
-            "clima": clima, "percurso": percurso, "dicas_destino": guia,
-            "metadados": {"status_requisicao": "sucesso", "status_servicos": {"inteligencia_artificial": diagnostico_ia}},
+            "telemetria": {"clima": clima, "percurso": percurso},
+            "dicas_destino": guia,
+            "metadados": {"status_requisicao": "sucesso", "status_servicos": status_servicos},
         }
         adicionar_viagem_usuario(chave, item, usuario)
     finally:
@@ -246,7 +253,7 @@ def criar_viagem():
     return redirect(url_for("index"))
 
 
-@app.route("/viagens/deletar/<string:viagem_id>", methods=["GET", "POST"])
+@app.route("/viagens/deletar/<string:viagem_id>", methods=["POST"])
 def deletar_viagem(viagem_id: str):
     """Exclui um roteiro da lista do usuário."""
     usuario = session.get("usuario")
@@ -268,7 +275,16 @@ def ver_viagens_json():
     dados = carregar_dados_viagens_json()
     usuario = session.get("usuario")
     if usuario and usuario["id"].startswith("demo:"):
-        dados["usuarios"] = {usuario["id"]: {"perfil": usuario, "roteiros": obter_viagens_usuario(usuario["id"])}}
+        roteiros = obter_viagens_usuario(usuario["id"])
+        dados["usuarios"] = {
+            usuario["id"]: {
+                "perfil": usuario,
+                "metadados": {"total_roteiros": len(roteiros)},
+                "roteiros": roteiros,
+            }
+        }
+        dados["total_usuarios"] = 1
+        dados["total_roteiros"] = len(roteiros)
     return jsonify(dados)
 
 

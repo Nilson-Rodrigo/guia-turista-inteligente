@@ -135,16 +135,37 @@
           </div>
 
           <!-- Badges de Telemetria e Clima -->
+          {% set telemetria = v.telemetria|default({}) %}
+          {% set clima = telemetria.clima|default(v.clima|default({})) %}
+          {% set percurso = telemetria.percurso|default(v.percurso|default({})) %}
           <div class="telemetria-grid">
-            <span class="tele-badge">🌡️ {{ v.clima.temperatura }}</span>
-            <span class="tele-badge">💧 {{ v.clima.umidade }}</span>
-            <span class="tele-badge">💨 {{ v.clima.vento }}</span>
-            <span class="tele-badge tele-badge-destaque">🚗 {{ v.percurso.distancia }}</span>
-            <span class="tele-badge tele-badge-tempo">⏱️ {{ v.percurso.tempo }}</span>
+            <span class="tele-badge">🌡️ {{ clima.temperatura }}</span>
+            <span class="tele-badge">💧 {{ clima.umidade }}</span>
+            <span class="tele-badge">💨 {{ clima.vento }}</span>
+            <span class="tele-badge tele-badge-destaque">🚗 {{ percurso.distancia }}</span>
+            <span class="tele-badge tele-badge-tempo">⏱️ {{ percurso.tempo }}</span>
           </div>
 
           <!-- Detalhes do Guia com Accordion -->
           <div id="detalhes-{{ v.id }}" class="viagem-detalhes hidden" onclick="event.stopPropagation()">
+            <div class="secao-guia">
+              <div class="secao-guia-header">📍 Localização</div>
+              <div class="localizacao-grid">
+                <span>Origem: {{ v.geolocalizacao.origem.cidade }} - {{ v.geolocalizacao.origem.uf }}</span>
+                <span>Coordenadas: {{ v.geolocalizacao.origem.latitude }}, {{ v.geolocalizacao.origem.longitude }}</span>
+                <span>Destino: {{ v.geolocalizacao.destino.cidade }} - {{ v.geolocalizacao.destino.uf }}</span>
+                <span>Coordenadas: {{ v.geolocalizacao.destino.latitude }}, {{ v.geolocalizacao.destino.longitude }}</span>
+              </div>
+            </div>
+            <div class="secao-guia">
+              <div class="secao-guia-header">📊 Status dos serviços</div>
+              <div class="localizacao-grid">
+                {% set status_servicos = v.metadados.status_servicos|default({}) %}
+                {% for servico, status in status_servicos.items() %}
+                <span>{{ servico }}: {{ status.status|default(status) }}</span>
+                {% endfor %}
+              </div>
+            </div>
             <div class="secao-guia">
               <div class="secao-guia-header">🏛️ Guia Turístico & Culinária do Destino</div>
               <div class="guia-texto">{{ v.dicas_destino }}</div>
