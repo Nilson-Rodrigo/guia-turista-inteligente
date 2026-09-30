@@ -8,7 +8,7 @@ from pathlib import Path
 PORT: int = int(os.getenv("PORT", "8001"))
 
 # Chaves e credenciais de integração externa
-GEMINI_KEY: str = os.getenv("GEMINI_API_KEY", "")
+GEMINI_KEY: str = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
 GOOGLE_CLIENT_ID: str = os.getenv(
     "GOOGLE_CLIENT_ID",
     "776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com",

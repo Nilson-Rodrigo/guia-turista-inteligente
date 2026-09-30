@@ -28,6 +28,7 @@
       <div style="font-size: 2.4rem; margin-bottom: 0.6rem;">🔒</div>
       <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 0.4rem; color: var(--text-main);">Autenticação Necessária</h2>
       <p style="color: var(--text-muted); margin-bottom: 1.6rem; font-size: 0.92rem;">Faça login com sua Conta Google para acessar o planejador de viagens.</p>
+      <p style="color: var(--text-muted); margin: -0.8rem auto 1.2rem; max-width: 34rem; font-size: 0.78rem;">Use este endereço exatamente como está no navegador: <strong>http://localhost:8001</strong>. A porta precisa estar autorizada no Google Cloud.</p>
       
       <!-- Container do Botão Google Renderizado Programaticamente -->
       <div style="display: flex; justify-content: center; flex-direction: column; align-items: center; gap: 12px;">
@@ -63,6 +64,16 @@
     </div>
     {% else %}
     <!-- Bloco da Aplicação (Liberado após Login com Sessão Flask) -->
+
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% if mensagens %}
+        {% for categoria, mensagem in mensagens %}
+        <div role="alert" style="margin-bottom: 1rem; padding: 0.9rem 1rem; border: 1px solid #ef4444; border-radius: 8px; color: #991b1b; background: #fef2f2; font-weight: 600;">
+          ⚠️ {{ mensagem }}
+        </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
     
     <!-- Barra de Perfil do Usuário -->
     <div class="card user-bar">

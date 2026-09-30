@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import flash
 
 from config import (
     DATA_DIR,
@@ -225,26 +226,50 @@ def criar_viagem():
         if not origem or not destino or uf_origem not in ESTADOS_BRASIL or uf_destino not in ESTADOS_BRASIL:
             return redirect(url_for("index"))
         with httpx.Client() as client:
-            lat_o, lon_o, uf_o_real = buscar_coordenadas(client, origem, uf_origem)
-            lat_d, lon_d, uf_d_real = buscar_coordenadas(client, destino, uf_destino)
+            lat_o, lon_o, uf_o_real = buscar_coordenadas(client, origem, uf_origem, usar_fallback_capital=False)
+            lat_d, lon_d, uf_d_real = buscar_coordenadas(client, destino, uf_destino, usar_fallback_capital=False)
+            if (lat_o, lon_o) == (0.0, 0.0) or (lat_d, lon_d) == (0.0, 0.0):
+                local = "origem" if (lat_o, lon_o) == (0.0, 0.0) else "destino"
+                flash(f"Não foi possível localizar a cidade de {local}. Confira o nome e a UF informados.", "error")
+                return redirect(url_for("index"))
             clima = obter_clima(client, lat_d, lon_d)
             percurso = obter_percurso(client, lat_o, lon_o, lat_d, lon_d)
         destino_formatado = f"{destino} - {uf_d_real or uf_destino}"
         guia, diagnostico_ia = obter_guia_destino_com_diagnostico(destino_formatado)
+        status_geocoding_origem = "sucesso" if (lat_o, lon_o) != (0.0, 0.0) else "fallback"
+        status_geocoding_destino = "sucesso" if (lat_d, lon_d) != (0.0, 0.0) else "fallback"
         status_servicos = {
-            "geocoding": "sucesso" if (lat_o, lon_o) != (0.0, 0.0) and (lat_d, lon_d) != (0.0, 0.0) else "fallback",
+            "geocoding": "sucesso" if status_geocoding_origem == status_geocoding_destino == "sucesso" else "fallback",
+            "geocoding_origem": {"status": status_geocoding_origem, "mensagem": "Coordenadas localizadas" if status_geocoding_origem == "sucesso" else "Coordenadas da capital utilizadas"},
+            "geocoding_destino": {"status": status_geocoding_destino, "mensagem": "Coordenadas localizadas" if status_geocoding_destino == "sucesso" else "Coordenadas da capital utilizadas"},
             "clima": "sucesso" if all(valor != "N/D" for valor in clima.values()) else "fallback",
             "percurso": "sucesso" if percurso.get("modal") != "indisponível" else "fallback",
             "inteligencia_artificial": diagnostico_ia,
         }
+        status_requisicao = "sucesso" if all(
+            status == "sucesso"
+            for status in (
+                status_geocoding_origem,
+                status_geocoding_destino,
+                status_servicos["clima"],
+                status_servicos["percurso"],
+                diagnostico_ia["status"],
+            )
+        ) else "parcial"
+        criado_em = agora_iso()
         item = {
-            "id": uuid.uuid4().hex[:8], "criado_em": agora_iso(),
+            "id": uuid.uuid4().hex[:8], "criado_em": criado_em,
             "origem": f"{origem} - {uf_o_real or uf_origem}", "destino": destino_formatado,
             "geolocalizacao": {"origem": {"cidade": origem, "uf": uf_o_real or uf_origem, "latitude": lat_o, "longitude": lon_o},
                                "destino": {"cidade": destino, "uf": uf_d_real or uf_destino, "latitude": lat_d, "longitude": lon_d}},
             "telemetria": {"clima": clima, "percurso": percurso},
             "dicas_destino": guia,
-            "metadados": {"status_requisicao": "sucesso", "status_servicos": status_servicos},
+            "metadados": {
+                "criado_em": criado_em,
+                "atualizado_em": criado_em,
+                "status_requisicao": status_requisicao,
+                "status_servicos": status_servicos,
+            },
         }
         adicionar_viagem_usuario(chave, item, usuario)
     finally:

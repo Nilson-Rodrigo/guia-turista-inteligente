@@ -61,6 +61,15 @@ export GOOGLE_CLIENT_ID="776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.goog
 export PORT="8001"
 ```
 
+No Google Cloud Console, em **APIs e serviços &gt; Credenciais &gt; ID do cliente OAuth 2.0**, adicione estas origens JavaScript autorizadas:
+
+```text
+http://localhost:8001
+http://127.0.0.1:8001
+```
+
+Abra o sistema por `http://localhost:8001`. A origem precisa coincidir exatamente com a cadastrada, incluindo protocolo, host e porta. Não use `8010`, o endereço IP da máquina ou outra porta sem cadastrá-los também.
+
 Windows (PowerShell):
 
 ```powershell

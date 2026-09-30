@@ -20,6 +20,12 @@ CAPITAIS_BRASIL: dict[str, tuple[float, float]] = {
     "SP": (-23.5505, -46.6333), "SE": (-10.9472, -37.0731), "TO": (-10.1840, -48.3336),
 }
 
+
+def _normalizar_nome_local(nome: str) -> str:
+    texto = unicodedata.normalize("NFD", nome.casefold())
+    texto = "".join(caractere for    caractere in texto if unicodedata.category(caractere) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", texto).strip()
+
 # ==============================================================================
 # 👤 RESPONSABILIDADE DO ALUNO 1: APIs REST, Autenticação JWT e Geocodificação
 # ==============================================================================
@@ -78,7 +84,7 @@ def obter_sigla_uf(admin1: str, uf_informada: str = "") -> str:
 
 
 def buscar_coordenadas(
-    client: httpx.Client, cidade: str, uf: str = ""
+    client: httpx.Client, cidade: str, uf: str = "", usar_fallback_capital: bool = True
 ) -> tuple[float, float, str]:
     """Consulta o Open-Meteo Geocoding com filtro Brasil (country_codes=BR) e timeout=4.0s.
 
@@ -86,7 +92,7 @@ def buscar_coordenadas(
     aplica fallback seguro retornando (0.0, 0.0, "Cidade - UF").
     """
     uf_normalizada = uf.strip().upper()
-    fallback_lat_lon = CAPITAIS_BRASIL.get(uf_normalizada, (0.0, 0.0))
+    fallback_lat_lon = CAPITAIS_BRASIL.get(uf_normalizada, (0.0, 0.0)) if usar_fallback_capital else (0.0, 0.0)
     fallback = (*fallback_lat_lon, uf_normalizada if fallback_lat_lon != (0.0, 0.0) else "")
     try:
         resposta = client.get(
@@ -101,15 +107,26 @@ def buscar_coordenadas(
     resultados = [item for item in resultados if str(item.get("country_code", "")).upper() == "BR"]
     if not resultados:
         return fallback
+    resultados_uf = [
+        item for item in resultados if obter_sigla_uf(str(item.get("admin1", "")), uf) == uf
+    ]
+    nome_informado = _normalizar_nome_local(cidade)
     escolhido = next(
-        (item for item in resultados if obter_sigla_uf(str(item.get("admin1", "")), uf) == uf),
-        resultados[0],
+        (item for item in resultados_uf if _normalizar_nome_local(str(item.get("name", ""))) == nome_informado),
+        None,
     )
+    if escolhido is None:
+        return fallback
     detectada = obter_sigla_uf(str(escolhido.get("admin1", "")), uf)
     try:
         return float(escolhido["latitude"]), float(escolhido["longitude"]), detectada
     except (KeyError, TypeError, ValueError):
         return fallback
+
+
+def destino_foi_localizado(latitude: float, longitude: float, uf_detectada: str) -> bool:
+    """Indica se o geocoding encontrou o destino, sem confundir fallback com resultado real."""
+    return (latitude, longitude) != CAPITAIS_BRASIL.get(uf_detectada, (0.0, 0.0)) or not uf_detectada
 
 
 # ==============================================================================

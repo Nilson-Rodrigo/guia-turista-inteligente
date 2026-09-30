@@ -26,16 +26,16 @@ def _guia_fallback(destino: str) -> str:
     return (
         f"📍 GUIA DE {destino.upper()}\n"
         "🏛️ PONTOS TURÍSTICOS PRINCIPAIS\n"
-        "Visite os principais pontos históricos, culturais e naturais da região.\n\n"
+        f"Pesquise e visite os pontos históricos, culturais e naturais de {destino}.\n\n"
         "🍲 CULINÁRIA LOCAL\n"
-        "Experimente pratos típicos e prestigie restaurantes locais.\n\n"
+        f"Experimente pratos típicos e prestigie restaurantes locais de {destino}.\n\n"
         "💡 DICA DE OURO\n"
-        "Confira o clima e os horários de funcionamento antes de sair."
+        f"Confira o clima e os horários de funcionamento antes de visitar {destino}."
     )
 
 
 def obter_guia_destino_com_diagnostico(destino: str) -> tuple[str, dict[str, Any]]:
-    """Invoca o modelo 'gemini-3.6-flash' com timeout de 6.0s em ThreadPoolExecutor.
+    """Invoca o modelo Gemini com limite operacional de 30.0s em ThreadPoolExecutor.
 
     Em caso de timeout, chave inválida ou ausência de cota, aciona automaticamente
     o gerador de contingência com roteiro estruturado em texto puro com emojis.
@@ -48,27 +48,44 @@ def obter_guia_destino_com_diagnostico(destino: str) -> tuple[str, dict[str, Any
         diagnostico["mensagem"] = "Chave Gemini ausente"
         return _guia_fallback(destino), diagnostico
 
-    def gerar() -> str:
+    def gerar() -> tuple[str, str]:
         cliente = genai.Client(api_key=GEMINI_KEY)
-        resposta = cliente.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=(
-                f"Crie um guia turístico curto para {destino}. Inclua atrações, culinária e uma dica de ouro. "
-                "Use somente texto puro e emojis, sem Markdown, asteriscos ou saudações."
-            ),
+        prompt = (
+            f"Você é um guia turístico local. Escreva um guia curto e específico para o destino "
+            f"{destino}. O nome exato do destino deve aparecer no título e nas recomendações. "
+            "Diga o que o viajante pode fazer lá: cite atrações, bairros, espaços culturais, "
+            "paisagens, atividades ao ar livre ou eventos que existam nesse destino e indique "
+            "comidas típicas associadas à cidade ou ao estado. "
+            "Não use frases genéricas como 'os principais pontos da região' e não troque "
+            "o destino por outra cidade. Se não tiver certeza de um nome, descreva o tipo "
+            "de atração sem inventar nomes. Inclua as seções Atrações, Gastronomia e Dica de ouro. "
+            "Use somente texto puro e emojis, sem Markdown, asteriscos ou saudações."
         )
-        return limpar_formato_texto(str(resposta.text or ""))
+        ultimo_erro: APIError | None = None
+        for modelo in ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.6-flash"):
+            try:
+                resposta = cliente.models.generate_content(model=modelo, contents=prompt)
+                texto = limpar_formato_texto(str(resposta.text or ""))
+                if texto:
+                    return texto, modelo
+            except APIError as erro:
+                ultimo_erro = erro
+        if ultimo_erro:
+            raise ultimo_erro
+        raise ValueError("Resposta vazia")
 
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    futuro = executor.submit(gerar)
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            texto = executor.submit(gerar).result(timeout=6.0)
-        if not texto:
-            raise ValueError("Resposta vazia")
-        diagnostico.update({"status": "sucesso", "fallback_utilizado": False})
+        texto, modelo = futuro.result(timeout=30.0)
+        diagnostico.update({"status": "sucesso", "modelo": modelo, "fallback_utilizado": False})
         return texto, diagnostico
     except (APIError, RuntimeError, TimeoutError, ValueError, OSError) as erro:
-        diagnostico["mensagem"] = str(erro)[:200]
+        futuro.cancel()
+        diagnostico["mensagem"] = str(erro)[:200] or "Tempo limite excedido"
         return _guia_fallback(destino), diagnostico
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def obter_guia_destino(destino: str) -> str:
