@@ -15,27 +15,36 @@ cd guia-turista-inteligente
 
 ---
 
-## 2. Criar e Ativar o Ambiente Virtual (`.venv`)
+## 2. Criar o Ambiente Virtual (`.venv`)
 
-=== "Linux / macOS"
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+Linux / macOS:
 
-=== "Windows (PowerShell)"
-    ```powershell
-    python -m venv .venv
-    .\.venv\Scripts\Activate.ps1
-    ```
+```bash
+python3 -m venv .venv
+```
+
+Opcionalmente, ative o ambiente para usar `python` e `pip` diretamente:
+
+```bash
+source .venv/bin/activate
+```
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+> Execute cada comando separadamente. Não escreva `bash` antes de `python3`.
 
 ---
 
 ### 3. Instalar as Dependências
 
 ```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 ---
@@ -44,19 +53,27 @@ pip install -r requirements.txt
 
 Configure as variáveis no seu terminal:
 
-=== "Linux / macOS"
-    ```bash
-    export GEMINI_API_KEY="SUA_CHAVE_GEMINI_AQUI"
-    export GOOGLE_CLIENT_ID="776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com"
-    export PORT="8001"
-    ```
+Linux / macOS:
 
-=== "Windows (PowerShell)"
-    ```powershell
-    $env:GEMINI_API_KEY="SUA_CHAVE_GEMINI_AQUI"
-    $env:GOOGLE_CLIENT_ID="776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com"
-    $env:PORT="8001"
-    ```
+```bash
+export GEMINI_API_KEY="SUA_CHAVE_GEMINI_AQUI"
+export GOOGLE_CLIENT_ID="776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com"
+export PORT="8001"
+```
+
+Windows (PowerShell):
+
+```powershell
+$env:GEMINI_API_KEY="SUA_CHAVE_GEMINI_AQUI"
+$env:GOOGLE_CLIENT_ID="776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com"
+$env:PORT="8001"
+```
+
+Para conferir se as variáveis foram carregadas no Linux/macOS:
+
+```bash
+.venv/bin/python -c 'import os; print("GEMINI_API_KEY:", "OK" if os.getenv("GEMINI_API_KEY") else "AUSENTE"); print("PORT:", os.getenv("PORT", "8001"))'
+```
 
 > **Obtenção da Chave Gemini:** Acesse o [Google AI Studio](https://aistudio.google.com/), crie sua chave e defina na variável `GEMINI_API_KEY`.
 
@@ -65,7 +82,7 @@ Configure as variáveis no seu terminal:
 ### 5. Iniciar o Servidor Flask
 
 ```bash
-python app.py
+.venv/bin/python app.py
 ```
 
 Acesse a aplicação no navegador em:  
