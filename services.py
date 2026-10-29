@@ -1,5 +1,6 @@
 # Serviços de integração com APIs externas (Google OAuth, Open-Meteo e OSRM)
 
+import math
 import re
 import unicodedata
 from typing import Any
@@ -25,6 +26,16 @@ def _normalizar_nome_local(nome: str) -> str:
     texto = unicodedata.normalize("NFD", nome.casefold())
     texto = "".join(caractere for    caractere in texto if unicodedata.category(caractere) != "Mn")
     return re.sub(r"[^a-z0-9]+", " ", texto).strip()
+
+def _nomes_parecidos(nome_informado: str, item: dict[str, Any]) -> bool:
+    """True se o nome digitado e o nome retornado pela API se contêm (com limite de palavra)."""
+    nome_api = _normalizar_nome_local(re.sub(r"\(.*?\)", "", str(item.get("name", ""))))
+    if not nome_api or not nome_informado:
+        return False
+    if re.search(rf"\b{re.escape(nome_informado)}\b", nome_api):
+        return True
+    return len(nome_api) >= 5 and re.search(rf"\b{re.escape(nome_api)}\b", nome_informado) is not None
+
 
 # ==============================================================================
 # 👤 RESPONSABILIDADE DO ALUNO 1: APIs REST, Autenticação JWT e Geocodificação
@@ -111,10 +122,29 @@ def buscar_coordenadas(
         item for item in resultados if obter_sigla_uf(str(item.get("admin1", "")), uf) == uf
     ]
     nome_informado = _normalizar_nome_local(cidade)
-    escolhido = next(
-        (item for item in resultados_uf if _normalizar_nome_local(str(item.get("name", ""))) == nome_informado),
-        None,
-    )
+    # Se a UF digitada não bate com nenhum resultado, aceita a cidade de mesmo nome em outra UF
+    # e devolve a UF real (admin1). Ex.: Teresina + RJ -> Teresina - PI.
+    def _exatos(lista: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            item for item in lista
+            if _normalizar_nome_local(re.sub(r"\(.*?\)", "", str(item.get("name", "")))) == nome_informado
+        ]
+
+    exatos_uf = _exatos(resultados_uf)
+    escolhido = None
+    if exatos_uf:
+        escolhido = exatos_uf[0]
+    elif not resultados_uf:
+        # UF digitada não bate com nenhum resultado: aceita a cidade de mesmo nome em outra UF e devolve a UF
+        # real (admin1). Ex.: Teresina + RJ -> Teresina - PI (teste 5 do enunciado). Se o nome existir em vários
+        # estados, escolhe o mais populoso (a API ordena por relevância; em empate, vale o primeiro).
+        outros = _exatos(resultados)
+        escolhido = max(outros, key=lambda item: float(item.get("population") or 0)) if outros else None
+    if escolhido is None:
+        # Sem nome idêntico: aceita nome parecido dentro da UF informada, só se houver um único candidato
+        # (ex.: "Fernando de Noronha" e a API devolveu "Noronha" ou "Arquipélago de Fernando de Noronha").
+        parecidos = [item for item in resultados_uf if _nomes_parecidos(nome_informado, item)]
+        escolhido = parecidos[0] if len(parecidos) == 1 else None
     if escolhido is None:
         return fallback
     detectada = obter_sigla_uf(str(escolhido.get("admin1", "")), uf)
@@ -175,10 +205,94 @@ def obter_percurso(
         url = f"https://router.project-osrm.org/route/v1/driving/{lon_o},{lat_o};{lon_d},{lat_d}"
         resposta = client.get(url, params={"overview": "false"}, timeout=6.0)
         resposta.raise_for_status()
-        rota = resposta.json().get("routes", [])[0]
+        dados = resposta.json()
+        if any(float(p.get("distance", 0)) > 30000 for p in dados.get("waypoints", [])):
+            return fallback
+        rota = dados.get("routes", [])[0]
         minutos = round(float(rota["duration"]) / 60)
         horas, minutos = divmod(minutos, 60)
         tempo = f"{horas}h {minutos:02d}min de carro" if horas else f"{minutos}min de carro"
         return {"distancia": f"{float(rota['distance']) / 1000:.1f} km", "tempo": tempo, "modal": "carro"}
     except (httpx.HTTPError, IndexError, KeyError, TypeError, ValueError):
         return fallback
+
+
+def extrair_distancia_e_tempo(percurso: dict[str, str]) -> tuple[float, float] | None:
+    """Converte o dict do OSRM ('1674.6 km', '21h 38min de carro') em (km, minutos).
+
+    Retorna None quando não há rota rodoviária (fallback do OSRM).
+    """
+    if percurso.get("modal") != "carro":
+        return None
+    try:
+        km = float(re.search(r"\d+(?:\.\d+)?", percurso["distancia"]).group())  # type: ignore[union-attr]
+        horas = re.search(r"(\d+)\s*h", percurso["tempo"])
+        minutos = re.search(r"(\d+)\s*min", percurso["tempo"])
+        total_min = (int(horas.group(1)) * 60 if horas else 0) + (int(minutos.group(1)) if minutos else 0)
+    except (AttributeError, KeyError, ValueError):
+        return None
+    return km, float(total_min)
+
+
+def _formatar_duracao(minutos: float) -> str:
+    horas, resto = divmod(round(minutos), 60)
+    return f"{horas}h {resto:02d}min" if horas else f"{resto}min"
+
+
+def calcular_gerenciador_paradas(
+    distancia_total_km: float,
+    tempo_total_min: float,
+    capacidade_tanque_ou_bateria: float = 50.0,
+    consumo_medio: float = 12.0,
+    tipo_veiculo: str = "combustivel",
+) -> dict[str, Any]:
+    """Calcula paradas estratégicas de descanso, abastecimento/recarga e alimentação.
+
+    Premissa obrigatória: o veículo inicia a viagem com TANQUE 100% CHEIO ou BATERIA 100% carregada.
+    Considera a autonomia útil com margem de segurança de 15% (85% da autonomia máxima).
+    - Abastecimento: N = floor(distancia_total / autonomia_util_km)
+    - Descanso: 1 parada de 15-20 min a cada 2.5 horas (150 minutos) de percurso.
+    - Alimentação: 1 parada principal (45 min) a cada 4.5 horas (270 minutos) em viagens > 4 horas.
+    """
+    eletrico = tipo_veiculo.strip().lower() in {"eletrico", "elétrico", "ev"}
+    unidade, rotulo, acao = ("kWh", "Elétrico", "recarga") if eletrico else ("L", "Gasolina/Flex", "abastecimento")
+    autonomia_maxima = capacidade_tanque_ou_bateria * consumo_medio
+    autonomia_util = autonomia_maxima * 0.85
+    resultado: dict[str, Any] = {
+        "tanque_inicial": "100% carregada" if eletrico else "100% cheio",
+        "capacidade_tanque_bateria": f"{capacidade_tanque_ou_bateria:.1f} {unidade} ({rotulo})",
+        "autonomia_util_segura": f"{autonomia_util:.1f} km (Reserva 15%)",
+        "paradas_abastecimento": 0,
+        "paradas_descanso": 0,
+        "paradas_alimentacao": 0,
+        "resumo_cronograma": "Sem rota rodoviária direta: gerenciador de paradas indisponível para este trajeto.",
+    }
+    if distancia_total_km <= 0 or tempo_total_min <= 0 or autonomia_util <= 0:
+        return resultado
+
+    paradas_abast = math.floor(distancia_total_km / autonomia_util)
+    paradas_descanso = math.floor(tempo_total_min / 150)
+    # Viagens acima de 4h têm ao menos 1 refeição; depois, 1 a cada 4,5h (270 min).
+    paradas_alimentacao = max(1, math.floor(tempo_total_min / 270)) if tempo_total_min > 240 else 0
+    tempo_paradas = paradas_abast * 15 + paradas_descanso * 20 + paradas_alimentacao * 45
+
+    partes = [f"Partida com {resultado['tanque_inicial']}."]
+    if paradas_abast:
+        marcos = ", ".join(f"km {round(autonomia_util * i)}" for i in range(1, paradas_abast + 1))
+        partes.append(f"Recomenda-se {paradas_abast} {acao}(ões) ({marcos}).")
+    else:
+        partes.append(f"Nenhum {acao} necessário: a autonomia útil cobre o trajeto.")
+    partes.append(f"{paradas_descanso} pausa(s) de descanso de 15 a 20 min (a cada 2h30 de direção).")
+    if paradas_alimentacao:
+        partes.append(f"{paradas_alimentacao} parada(s) de refeição principal de 45 min.")
+    partes.append(
+        f"Tempo estimado em paradas: {_formatar_duracao(tempo_paradas)}; "
+        f"chegada total em cerca de {_formatar_duracao(tempo_total_min + tempo_paradas)}."
+    )
+    resultado.update(
+        paradas_abastecimento=paradas_abast,
+        paradas_descanso=paradas_descanso,
+        paradas_alimentacao=paradas_alimentacao,
+        resumo_cronograma=" ".join(partes),
+    )
+    return resultado

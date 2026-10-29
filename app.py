@@ -6,12 +6,20 @@ import re
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
-from flask import flash
+from flask import (
+    Flask,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 from config import (
     DATA_DIR,
@@ -23,6 +31,8 @@ from config import (
 from planejamento import obter_guia_destino_com_diagnostico
 from services import (
     buscar_coordenadas,
+    calcular_gerenciador_paradas,
+    extrair_distancia_e_tempo,
     obter_clima,
     obter_percurso,
     verificar_token_google,
@@ -33,7 +43,7 @@ app.secret_key = os.getenv("SECRET_KEY", "guia-turista-secret-key-2026-python")
 
 
 def agora_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 # Controle de concorrência para leitura e escrita segura no arquivo JSON
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -235,7 +245,17 @@ def criar_viagem():
             clima = obter_clima(client, lat_d, lon_d)
             percurso = obter_percurso(client, lat_o, lon_o, lat_d, lon_d)
         destino_formatado = f"{destino} - {uf_d_real or uf_destino}"
-        guia, diagnostico_ia = obter_guia_destino_com_diagnostico(destino_formatado)
+        origem_formatada = f"{origem} - {uf_o_real or uf_origem}"
+        numeros_percurso = extrair_distancia_e_tempo(percurso)
+        paradas = calcular_gerenciador_paradas(*(numeros_percurso or (0.0, 0.0)))
+        contexto_ia = (
+            f"viagem de carro saindo de {origem_formatada}; clima atual no destino: "
+            f"{clima['temperatura']}, umidade {clima['umidade']}, vento {clima['vento']}; "
+            f"percurso: {percurso['distancia']} em {percurso['tempo']}; "
+            f"paradas sugeridas: {paradas['paradas_abastecimento']} abastecimento(s), "
+            f"{paradas['paradas_descanso']} descanso(s) e {paradas['paradas_alimentacao']} refeição(ões)."
+        )
+        guia, diagnostico_ia = obter_guia_destino_com_diagnostico(destino_formatado, contexto_ia)
         status_geocoding_origem = "sucesso" if (lat_o, lon_o) != (0.0, 0.0) else "fallback"
         status_geocoding_destino = "sucesso" if (lat_d, lon_d) != (0.0, 0.0) else "fallback"
         status_servicos = {
@@ -244,6 +264,7 @@ def criar_viagem():
             "geocoding_destino": {"status": status_geocoding_destino, "mensagem": "Coordenadas localizadas" if status_geocoding_destino == "sucesso" else "Coordenadas da capital utilizadas"},
             "clima": "sucesso" if all(valor != "N/D" for valor in clima.values()) else "fallback",
             "percurso": "sucesso" if percurso.get("modal") != "indisponível" else "fallback",
+            "gerenciador_paradas": "sucesso" if numeros_percurso else "fallback",
             "inteligencia_artificial": diagnostico_ia,
         }
         status_requisicao = "sucesso" if all(
@@ -259,10 +280,10 @@ def criar_viagem():
         criado_em = agora_iso()
         item = {
             "id": uuid.uuid4().hex[:8], "criado_em": criado_em,
-            "origem": f"{origem} - {uf_o_real or uf_origem}", "destino": destino_formatado,
+            "origem": origem_formatada, "destino": destino_formatado,
             "geolocalizacao": {"origem": {"cidade": origem, "uf": uf_o_real or uf_origem, "latitude": lat_o, "longitude": lon_o},
                                "destino": {"cidade": destino, "uf": uf_d_real or uf_destino, "latitude": lat_d, "longitude": lon_d}},
-            "telemetria": {"clima": clima, "percurso": percurso},
+            "telemetria": {"clima": clima, "percurso": percurso, "gerenciador_paradas": paradas},
             "dicas_destino": guia,
             "metadados": {
                 "criado_em": criado_em,
@@ -327,4 +348,4 @@ def pagina_nao_encontrada(error):
 
 if __name__ == "__main__":
     print(f"🌍 Servidor Flask Guia do Turista rodando em http://localhost:{PORT}")
-    app.run(host="0.0.0.0", port=PORT, debug=True)
+    app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG") == "1")

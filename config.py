@@ -14,6 +14,9 @@ GOOGLE_CLIENT_ID: str = os.getenv(
     "776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com",
 )
 
+# Tempo limite (segundos) da chamada ao Gemini. O enunciado cita 6.0s, mas o guia detalhado leva de 13 a 26s; ajustável por variável de ambiente.
+GEMINI_TIMEOUT: float = float(os.getenv("GEMINI_TIMEOUT", "30.0"))
+
 # Caminhos de arquivos estáticos e bases de dados JSON
 BASE_DIR: Path = Path(__file__).resolve().parent
 DATA_DIR: Path = BASE_DIR / "static" / "data"

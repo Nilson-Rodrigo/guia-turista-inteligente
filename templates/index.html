@@ -155,6 +155,12 @@
             <span class="tele-badge">💨 {{ clima.vento }}</span>
             <span class="tele-badge tele-badge-destaque">🚗 {{ percurso.distancia }}</span>
             <span class="tele-badge tele-badge-tempo">⏱️ {{ percurso.tempo }}</span>
+            {% set gp = telemetria.gerenciador_paradas|default({}) %}
+            {% if gp %}
+            <span class="tele-badge">⛽ {{ gp.paradas_abastecimento }} abast.</span>
+            <span class="tele-badge">😴 {{ gp.paradas_descanso }} descanso(s)</span>
+            <span class="tele-badge">🍽️ {{ gp.paradas_alimentacao }} refeição(ões)</span>
+            {% endif %}
           </div>
 
           <!-- Detalhes do Guia com Accordion -->
@@ -177,6 +183,17 @@
                 {% endfor %}
               </div>
             </div>
+            {% if gp %}
+            <div class="secao-guia">
+              <div class="secao-guia-header">⛽ Gerenciador Inteligente de Paradas</div>
+              <div class="localizacao-grid">
+                <span>Partida: {{ gp.tanque_inicial }}</span>
+                <span>Capacidade: {{ gp.capacidade_tanque_bateria }}</span>
+                <span>Autonomia útil: {{ gp.autonomia_util_segura }}</span>
+              </div>
+              <div class="guia-texto">{{ gp.resumo_cronograma }}</div>
+            </div>
+            {% endif %}
             <div class="secao-guia">
               <div class="secao-guia-header">🏛️ Guia Turístico & Culinária do Destino</div>
               <div class="guia-texto">{{ v.dicas_destino }}</div>
