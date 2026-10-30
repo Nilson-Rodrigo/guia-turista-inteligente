@@ -159,9 +159,9 @@ JSON de viagens + resposta renderizada
 - Comparação do campo `aud` com `GOOGLE_CLIENT_ID`.
 - Sessão Flask em `session["usuario"]`.
 - Modo visitante em `/auth/demo`.
-- Endereço de demonstração: `http://localhost:8001`.
+- Endereço de demonstração: `http://127.0.0.1:8001`.
 - O modo visitante permite testar a aplicação sem depender do Google OAuth.
-- Para login Google, a origem `http://localhost:8001` precisa estar autorizada no Google Cloud.
+- Para login Google, a origem `http://127.0.0.1:8001` precisa estar autorizada no Google Cloud.
 
 ### Explicação
 
@@ -385,7 +385,7 @@ O JavaScript também:
 
 ### Ordem recomendada
 
-1. Abrir `http://localhost:8001`.
+1. Abrir `http://127.0.0.1:8001`.
 2. Entrar como visitante.
 3. Informar origem e destino.
 4. Clicar em **Gerar Guia com APIs & IA**.
@@ -409,7 +409,7 @@ O JavaScript também:
 
 - Não exibir a chave `GEMINI_API_KEY`.
 - Preferir **Entrar como Visitante** para a demonstração, evitando bloqueios de origem do Google.
-- Se usar login Google, abrir exatamente `http://localhost:8001`.
+- Se usar login Google, abrir exatamente `http://127.0.0.1:8001`.
 - Deixar as APIs carregarem antes de clicar novamente.
 - Se o Gemini estiver indisponível, explicar o fallback em vez de interromper a apresentação.
 - Mostrar o JSON apenas depois de criar um roteiro.
@@ -487,9 +487,9 @@ Não. O Gemini é responsável pelo texto turístico. Localização, clima e per
 - [ ] Conferir `GEMINI_API_KEY` sem mostrar a chave para a sala.
 - [ ] Instalar dependências com `.venv/bin/python -m pip install -r requirements.txt`.
 - [ ] Iniciar `.venv/bin/python app.py`.
-- [ ] Confirmar `http://localhost:8001`.
+- [ ] Confirmar `http://127.0.0.1:8001`.
 - [ ] Usar **Entrar como Visitante** para iniciar a demonstração.
-- [ ] Se usar Google, cadastrar `http://localhost:8001` nas origens autorizadas.
+- [ ] Se usar Google, cadastrar `http://127.0.0.1:8001` nas origens autorizadas.
 - [ ] Cada integrante saber explicar seus arquivos.
 - [ ] Criar um roteiro antes da apresentação.
 - [ ] Deixar o navegador e o terminal prontos.
