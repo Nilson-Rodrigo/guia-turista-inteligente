@@ -57,7 +57,7 @@ Linux / macOS:
 
 ```bash
 export GEMINI_API_KEY="SUA_CHAVE_GEMINI_AQUI"
-export GOOGLE_CLIENT_ID="776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com"
+export GOOGLE_CLIENT_ID="418686361464-m2hip9tp1v15sr3lj14iip3q956c756g.apps.googleusercontent.com"
 export PORT="8001"
 ```
 
@@ -68,13 +68,21 @@ http://localhost:8001
 http://127.0.0.1:8001
 ```
 
-Abra o sistema por `http://localhost:8001`. A origem precisa coincidir exatamente com a cadastrada, incluindo protocolo, host e porta. Não use `8010`, o endereço IP da máquina ou outra porta sem cadastrá-los também.
+Abra o sistema por `http://127.0.0.1:8001`. Como `localhost` e `127.0.0.1` são origens diferentes, use sempre o mesmo endereço que está cadastrado no Google Cloud. A origem precisa coincidir exatamente, incluindo protocolo, host e porta.
+
+#### Diagnóstico do login Google
+
+Foi identificado o erro `Erro 400: origin_mismatch` ao abrir o app por `http://localhost:8001`, enquanto o login funcionou por `http://127.0.0.1:8001`. O Google considera esses endereços origens distintas. Cadastre ambos no mesmo cliente OAuth do tipo **Aplicativo da Web** e abra o app usando exatamente uma das origens autorizadas. Para este projeto, o endereço confirmado é `http://127.0.0.1:8001`.
+
+O fluxo do projeto usa o callback JavaScript do Google Identity Services: o navegador recebe a credencial e a envia ao Flask em `POST /auth/google/callback`. Portanto, a URI `/auth/callback` não corresponde a uma rota do app e não é usada por esse fluxo. Cadastre as origens JavaScript autorizadas; não é necessário cadastrar uma URI de redirecionamento para esse callback JavaScript.
+
+Se o Google continuar exibindo `origin_mismatch`, confira se a origem foi salva no mesmo cliente cujo ID está sendo usado pelo app e se o endereço na barra do navegador, incluindo protocolo, host e porta, é idêntico ao cadastrado. O backend também compara o campo `aud` do token com `GOOGLE_CLIENT_ID`. Quando essa variável de ambiente está definida, ela substitui o valor padrão de `config.py`; configure-a com o ID do mesmo cliente OAuth exibido na página de login.
 
 Windows (PowerShell):
 
 ```powershell
 $env:GEMINI_API_KEY="SUA_CHAVE_GEMINI_AQUI"
-$env:GOOGLE_CLIENT_ID="776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com"
+$env:GOOGLE_CLIENT_ID="418686361464-m2hip9tp1v15sr3lj14iip3q956c756g.apps.googleusercontent.com"
 $env:PORT="8001"
 ```
 
@@ -95,7 +103,7 @@ Para conferir se as variáveis foram carregadas no Linux/macOS:
 ```
 
 Acesse a aplicação no navegador em:  
-👉 **`http://localhost:8001`**
+👉 **`http://127.0.0.1:8001`**
 
 ---
 

@@ -11,7 +11,7 @@ PORT: int = int(os.getenv("PORT", "8001"))
 GEMINI_KEY: str = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
 GOOGLE_CLIENT_ID: str = os.getenv(
     "GOOGLE_CLIENT_ID",
-    "776335673676-dk7od4ljhh43bio4bppf94i8ou0u9v9i.apps.googleusercontent.com",
+    "418686361464-m2hip9tp1v15sr3lj14iip3q956c756g.apps.googleusercontent.com",
 )
 
 # Tempo limite (segundos) da chamada ao Gemini. O enunciado cita 6.0s, mas o guia detalhado leva de 13 a 26s; ajustável por variável de ambiente.
